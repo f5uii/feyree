@@ -36,20 +36,30 @@ blueprint:
 
 trigger:
   - platform: time_pattern
-    seconds: "{{ input.adjustment_interval }}"
+    seconds: "*"
   - platform: state
     entity_id: !input target_current_input
   - platform: state
     entity_id: !input charger_state
 
-condition:
-  - condition: template
-    value_template: >
-      {{ states(input.charger_state) in ['available', 'plugged_in', 'charging', 'waiting_for_authorization'] }}
-
 variables:
   target_current: "{{ states(input.target_current_input) | float }}"
   current_setting: "{{ states(input.charger_current_control) | float }}"
+  last_update: "{{ states('sensor.date_time_iso') }}"
+  should_update: >
+    {% set last = states['automation.ev_charger_rampe_progressive_de_courant'].attributes.last_triggered | default(0) %}
+    {% set now = as_timestamp(states('sensor.date_time_iso')) | int %}
+    {% set interval = states(input.adjustment_interval) | int %}
+    {{ (now - last) >= interval }}
+
+condition:
+  - condition: and
+    conditions:
+      - condition: template
+        value_template: "{{ should_update }}"
+      - condition: template
+        value_template: >
+          {{ states(input.charger_state) in ['available', 'plugged_in', 'charging', 'waiting_for_authorization'] }}
 
 action:
   - choose:
