@@ -36,7 +36,7 @@ blueprint:
 
 trigger:
   - platform: time_pattern
-    seconds: "/{{ input.adjustment_interval }}"
+    seconds: "{{ input.adjustment_interval }}"
   - platform: state
     entity_id: !input target_current_input
   - platform: state
