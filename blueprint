@@ -1,0 +1,76 @@
+blueprint:
+  name: "EV Charger - Contrôle progressif du courant"
+  description: >
+    Ajuste progressivement le courant de charge d'un EV Charger par pas de 1A 
+    vers une valeur cible définie par un input_number.
+    L'intervalle d'ajustement est configurable de 1 à 60 secondes.
+  domain: automation
+  input:
+    target_current_input:
+      name: "Input Number pour courant cible"
+      description: "Sélectionnez l'input_number qui définit le courant cible"
+      selector:
+        entity:
+          domain: input_number
+    charger_current_control:
+      name: "Contrôle du courant du chargeur"
+      description: "Sélectionnez l'entité qui contrôle le courant du chargeur"
+      selector:
+        entity:
+          domain: number
+    adjustment_interval:
+      name: "Intervalle d'ajustement (secondes)"
+      description: "Intervalle entre chaque ajustement de 1A (1-60 secondes)"
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 60
+          step: 1
+    charger_state:
+      name: "État du chargeur"
+      description: "Sélectionnez le capteur d'état du chargeur"
+      selector:
+        entity:
+          domain: sensor
+
+trigger:
+  - platform: time_pattern
+    seconds: "/{{ input.adjustment_interval }}"
+  - platform: state
+    entity_id: !input target_current_input
+  - platform: state
+    entity_id: !input charger_state
+
+condition:
+  - condition: template
+    value_template: >
+      {{ states(input.charger_state) in ['available', 'plugged_in', 'charging', 'waiting_for_authorization'] }}
+
+variables:
+  target_current: "{{ states(input.target_current_input) | float }}"
+  current_setting: "{{ states(input.charger_current_control) | float }}"
+
+action:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ target_current > current_setting }}"
+        sequence:
+          - service: number.set_value
+            target:
+              entity_id: !input charger_current_control
+            data:
+              value: "{{ [current_setting + 1, target_current] | min }}"
+      
+      - conditions:
+          - condition: template
+            value_template: "{{ target_current < current_setting }}"
+        sequence:
+          - service: number.set_value
+            target:
+              entity_id: !input charger_current_control
+            data:
+              value: "{{ [current_setting - 1, target_current] | max }}"
+
+mode: single
